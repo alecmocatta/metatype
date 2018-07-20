@@ -1,0 +1,22 @@
+[package]
+name = "metatype"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Alec Mocatta <alec@mocatta.net>"]
+categories = ["development-tools","rust-patterns"]
+keywords = ["meta","types","trait-object","vtable","slice"]
+description = """
+Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
+"""
+repository = "https://github.com/alecmocatta/metatype"
+homepage = "https://github.com/alecmocatta/metatype"
+documentation = "https://docs.rs/metatype/0.1.0"
+readme = "README.md"
+
+[badges]
+appveyor = { repository = "alecmocatta/metatype" }
+circle-ci = { repository = "alecmocatta/metatype" }
+#gitlab = { repository = "alecmocatta/metatype" }
+travis-ci = { repository = "alecmocatta/metatype" }
+
+maintenance = { status = "actively-developed" }
