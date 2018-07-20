@@ -6,7 +6,7 @@
 [![Build Status](https://circleci.com/gh/alecmocatta/metatype/tree/master.svg?style=shield)](https://circleci.com/gh/alecmocatta/metatype)
 [![Build Status](https://travis-ci.com/alecmocatta/metatype.svg?branch=master)](https://travis-ci.com/alecmocatta/metatype)
 
-[Docs](https://docs.rs/metatype/0.1.0)
+[Docs](https://docs.rs/metatype/0.1.1)
 
 Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
 

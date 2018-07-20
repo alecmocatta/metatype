@@ -29,7 +29,7 @@
 //!
 //! This currently requires Rust nightly for the `raw` and `specialization` features.
 
-#![doc(html_root_url = "https://docs.rs/metatype/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/metatype/0.1.1")]
 #![feature(raw, box_syntax, specialization)]
 #![deny(missing_docs, warnings, deprecated)]
 
