@@ -45,7 +45,7 @@ pub trait Type {
 	fn meta_type(&self) -> MetaType {
 		Self::METATYPE
 	}
-	/// Retrieve metadata for a type
+	/// Retrieve [TraitObject], [Slice] or [Concrete] meta data respectively for a type
 	fn meta(&self) -> Self::Meta;
 	/// Retrieve pointer to the data
 	fn data(&self) -> *const ();
@@ -69,7 +69,7 @@ pub enum MetaType {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct TraitObject {
 	/// Address of vtable
-	pub vtable: *const (),
+	pub vtable: &'static (),
 }
 /// Meta data for a slice
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -101,7 +101,7 @@ impl<T: ?Sized> Type for T {
 			self as *const T as *const ()
 		);
 		let ret = TraitObject {
-			vtable: trait_object.vtable,
+			vtable: unsafe { &*trait_object.vtable },
 		};
 		assert_eq!(
 			any::TypeId::of::<Self::Meta>(),
@@ -153,7 +153,7 @@ impl<T: ?Sized> Type for T {
 		);
 		let object: &Self = mem::transmute_copy(&raw::TraitObject {
 			data: &mut (),
-			vtable: t.vtable as *mut (),
+			vtable: t.vtable as *const () as *mut (),
 		}); // ptr::null_mut() causes llvm to assume below is unreachable
 		let (size, align) = (mem::size_of_val(object), mem::align_of_val(object));
 		let mut backing = Vec::with_capacity(size);
@@ -170,7 +170,7 @@ impl<T: ?Sized> Type for T {
 		);
 		mem::transmute_copy(&raw::TraitObject {
 			data: backing.data,
-			vtable: t.vtable as *mut (),
+			vtable: t.vtable as *const () as *mut (),
 		})
 	}
 }
