@@ -10,7 +10,7 @@
 
 Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
 
-# Examples
+## Examples
 
 ```rust
 assert_eq!(usize::METATYPE, MetaType::Concrete);
@@ -33,7 +33,7 @@ let a: Box<any::Any> = Box::new(123);
 // println!("vtable: {:?}", meta.vtable);
 ```
 
-# Note
+## Note
 
 This currently requires Rust nightly for the `raw` and `specialization` features.
 

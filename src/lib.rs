@@ -31,7 +31,17 @@
 
 #![doc(html_root_url = "https://docs.rs/metatype/0.1.1")]
 #![feature(raw, box_syntax, specialization)]
-#![deny(missing_docs, warnings, deprecated)]
+#![warn(
+	missing_copy_implementations,
+	missing_debug_implementations,
+	missing_docs,
+	trivial_numeric_casts,
+	unused_extern_crates,
+	unused_import_braces,
+	unused_qualifications,
+	unused_results,
+	clippy::pedantic
+)] // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 
 use std::{any, mem, raw};
 
@@ -98,7 +108,7 @@ impl<T: ?Sized> Type for T {
 		let trait_object: raw::TraitObject = unsafe { mem::transmute_copy(&self) };
 		assert_eq!(
 			trait_object.data as *const (),
-			self as *const T as *const ()
+			self as *const Self as *const ()
 		);
 		let ret = TraitObject {
 			vtable: unsafe { &*trait_object.vtable },
@@ -121,9 +131,9 @@ impl<T: ?Sized> Type for T {
 		let trait_object: raw::TraitObject = unsafe { mem::transmute_copy(&self) };
 		assert_eq!(
 			trait_object.data as *const (),
-			self as *const T as *const ()
+			self as *const Self as *const ()
 		);
-		self as *const T as *const ()
+		self as *const Self as *const ()
 	}
 	#[inline]
 	default fn data_mut(&mut self) -> *mut () {
@@ -135,8 +145,8 @@ impl<T: ?Sized> Type for T {
 			)
 		);
 		let trait_object: raw::TraitObject = unsafe { mem::transmute_copy(&self) };
-		assert_eq!(trait_object.data, self as *mut T as *mut ());
-		self as *mut T as *mut ()
+		assert_eq!(trait_object.data, self as *mut Self as *mut ());
+		self as *mut Self as *mut ()
 	}
 	default unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self> {
 		assert_eq!(
@@ -249,6 +259,7 @@ impl Type for str {
 
 #[cfg(test)]
 mod tests {
+	#![allow(clippy::cast_ptr_alignment, clippy::shadow_unrelated)]
 	use super::{MetaType, Type};
 	use std::{any, mem, ptr};
 
@@ -263,12 +274,12 @@ mod tests {
 		let meta = Type::meta(&*a); // : TraitObject
 		let mut b: Box<any::Any> = unsafe { Type::uninitialized_box(meta) };
 		assert_eq!(mem::size_of_val(&*b), mem::size_of::<usize>());
-		unsafe { ptr::write(&mut *b as *mut any::Any as *mut usize, 456usize) };
+		unsafe { ptr::write(&mut *b as *mut any::Any as *mut usize, 456_usize) };
 		let x: usize = *Box::<any::Any>::downcast(b).unwrap();
 		assert_eq!(x, 456);
 		let a: &[usize] = &[1, 2, 3];
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
-		let a: Box<[usize]> = vec![1usize, 2, 3].into_boxed_slice();
+		let a: Box<[usize]> = vec![1_usize, 2, 3].into_boxed_slice();
 		assert_eq!(Type::meta_type(&*a), MetaType::Slice);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 		let a: &str = "abc";
