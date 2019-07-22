@@ -1,7 +1,7 @@
 [package]
 name = "metatype"
 version = "0.1.1"
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["development-tools","rust-patterns"]
 keywords = ["meta","types","trait-object","vtable","slice"]
@@ -12,11 +12,8 @@ repository = "https://github.com/alecmocatta/metatype"
 homepage = "https://github.com/alecmocatta/metatype"
 documentation = "https://docs.rs/metatype/0.1.1"
 readme = "README.md"
+edition = "2018"
 
 [badges]
-appveyor = { repository = "alecmocatta/metatype" }
-circle-ci = { repository = "alecmocatta/metatype" }
-#gitlab = { repository = "alecmocatta/metatype" }
-travis-ci = { repository = "alecmocatta/metatype" }
-
-maintenance = { status = "actively-developed" }
+azure-devops = { project = "alecmocatta/metatype", pipeline = "tests" }
+maintenance = { status = "passively-maintained" }
