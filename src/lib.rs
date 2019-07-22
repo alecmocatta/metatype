@@ -11,7 +11,7 @@
 //!
 //! let a: Box<usize> = Box::new(123);
 //! assert_eq!((&*a).meta_type(), MetaType::Concrete);
-//! let a: Box<any::Any> = a;
+//! let a: Box<dyn any::Any> = a;
 //! assert_eq!((&*a).meta_type(), MetaType::TraitObject);
 //!
 //! let a = [123,456];
@@ -19,7 +19,7 @@
 //! let a: &[i32] = &a;
 //! assert_eq!(a.meta_type(), MetaType::Slice);
 //!
-//! let a: Box<any::Any> = Box::new(123);
+//! let a: Box<dyn any::Any> = Box::new(123);
 //! // https://github.com/rust-lang/rust/issues/50318
 //! // let meta: TraitObject = (&*a).meta();
 //! // println!("vtable: {:?}", meta.vtable);
@@ -268,14 +268,14 @@ mod tests {
 		let a: Box<usize> = Box::new(123);
 		assert_eq!(Type::meta_type(&*a), MetaType::Concrete);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
-		let a: Box<any::Any> = a;
+		let a: Box<dyn any::Any> = a;
 		assert_eq!(Type::meta_type(&*a), MetaType::TraitObject);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 		let meta = Type::meta(&*a); // : TraitObject
-		let mut b: Box<any::Any> = unsafe { Type::uninitialized_box(meta) };
+		let mut b: Box<dyn any::Any> = unsafe { Type::uninitialized_box(meta) };
 		assert_eq!(mem::size_of_val(&*b), mem::size_of::<usize>());
-		unsafe { ptr::write(&mut *b as *mut any::Any as *mut usize, 456_usize) };
-		let x: usize = *Box::<any::Any>::downcast(b).unwrap();
+		unsafe { ptr::write(&mut *b as *mut dyn any::Any as *mut usize, 456_usize) };
+		let x: usize = *Box::<dyn any::Any>::downcast(b).unwrap();
 		assert_eq!(x, 456);
 		let a: &[usize] = &[1, 2, 3];
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
