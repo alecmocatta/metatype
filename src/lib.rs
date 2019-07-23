@@ -43,7 +43,9 @@
 	clippy::pedantic
 )] // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
 
-use std::{any, mem, raw};
+use std::{
+	any, mem::{self, MaybeUninit}, raw
+};
 
 /// Implemented on all types, it provides helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
 pub trait Type {
@@ -153,7 +155,6 @@ impl<T: ?Sized> Type for T {
 			any::TypeId::of::<Self::Meta>(),
 			any::TypeId::of::<TraitObject>()
 		);
-		let t: TraitObject = mem::transmute_copy(&t);
 		assert_eq!(
 			(mem::size_of::<&Self>(), mem::align_of::<&Self>()),
 			(
@@ -161,27 +162,18 @@ impl<T: ?Sized> Type for T {
 				mem::align_of::<raw::TraitObject>()
 			)
 		);
-		let object: &Self = mem::transmute_copy(&raw::TraitObject {
-			data: &mut (),
-			vtable: t.vtable as *const () as *mut (),
-		}); // ptr::null_mut() causes llvm to assume below is unreachable
-		let (size, align) = (mem::size_of_val(object), mem::align_of_val(object));
-		let mut backing = Vec::with_capacity(size);
-		backing.set_len(size);
-		let backing: Box<[u8]> = backing.into_boxed_slice();
-		assert_eq!(backing.get_unchecked(0) as *const u8 as usize % align, 0);
-		let backing = mem::transmute::<_, raw::TraitObject>(backing); // TODO: work out how to make backing sufficiently aligned
-		assert_eq!(
-			(mem::size_of::<Box<Self>>(), mem::align_of::<Box<Self>>()),
-			(
-				mem::size_of::<raw::TraitObject>(),
-				mem::align_of::<raw::TraitObject>()
-			)
-		);
-		mem::transmute_copy(&raw::TraitObject {
-			data: backing.data,
-			vtable: t.vtable as *const () as *mut (),
-		})
+
+		let t: TraitObject = mem::transmute_copy(&t);
+		let vtable = t.vtable as *const () as *mut ();
+		let mut data = {
+			#[repr(align(64))]
+			struct Backing(u8);
+			static BACKING: Backing = Backing(0);
+			&BACKING as *const _ as *mut ()
+		};
+		let object: &Self = mem::transmute_copy(&raw::TraitObject { data, vtable });
+		data = std::alloc::alloc(std::alloc::Layout::for_value(object)) as *mut ();
+		mem::transmute_copy(&raw::TraitObject { data, vtable })
 	}
 }
 #[doc(hidden)]
@@ -201,7 +193,7 @@ impl<T: Sized> Type for T {
 		self as *mut Self as *mut ()
 	}
 	unsafe fn uninitialized_box(_: Self::Meta) -> Box<Self> {
-		box mem::uninitialized()
+		mem::transmute(box MaybeUninit::<Self>::uninit())
 	}
 }
 #[doc(hidden)]
