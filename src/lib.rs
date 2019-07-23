@@ -29,7 +29,7 @@
 //!
 //! This currently requires Rust nightly for the `raw` and `specialization` features.
 
-#![doc(html_root_url = "https://docs.rs/metatype/0.1.1")]
+#![doc(html_root_url = "https://docs.rs/metatype/0.1.2")]
 #![feature(raw, box_syntax, specialization)]
 #![warn(
 	missing_copy_implementations,
@@ -64,6 +64,8 @@ pub trait Type {
 	/// Retrieve mut pointer to the data
 	fn data_mut(&mut self) -> *mut ();
 	/// Create a `Box<Self>` with the provided `Self::Meta` but with the allocated data uninitialized.
+	///
+	/// See the ongoing discussion [Validity of Box\<T\>](https://github.com/rust-lang/unsafe-code-guidelines/issues/145) for validity.
 	unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self>;
 }
 /// Meta type of a type

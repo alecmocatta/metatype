@@ -4,7 +4,7 @@
 [![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/metatype.svg?maxAge=2592000)](#License)
 [![Build Status](https://dev.azure.com/alecmocatta/metatype/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/metatype/_build/latest?branchName=master)
 
-[Docs](https://docs.rs/metatype/0.1.1)
+[Docs](https://docs.rs/metatype/0.1.2)
 
 Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
 

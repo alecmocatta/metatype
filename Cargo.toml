@@ -1,6 +1,6 @@
 [package]
 name = "metatype"
-version = "0.1.1"
+version = "0.1.2"
 license = "MIT OR Apache-2.0"
 authors = ["Alec Mocatta <alec@mocatta.net>"]
 categories = ["development-tools","rust-patterns"]
@@ -10,7 +10,7 @@ Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concret
 """
 repository = "https://github.com/alecmocatta/metatype"
 homepage = "https://github.com/alecmocatta/metatype"
-documentation = "https://docs.rs/metatype/0.1.1"
+documentation = "https://docs.rs/metatype/0.1.2"
 readme = "README.md"
 edition = "2018"
 
