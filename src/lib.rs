@@ -64,6 +64,8 @@ pub trait Type {
 	/// Retrieve mut pointer to the data
 	fn data_mut(&mut self) -> *mut ();
 	/// Create a `Box<Self>` with the provided `Self::Meta` but with the allocated data uninitialized.
+	///
+	/// See the ongoing discussion [Validity of Box\<T\>](https://github.com/rust-lang/unsafe-code-guidelines/issues/145) for validity.
 	unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self>;
 }
 /// Meta type of a type
