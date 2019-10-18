@@ -4,7 +4,7 @@
 [![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/metatype.svg?maxAge=2592000)](#License)
 [![Build Status](https://dev.azure.com/alecmocatta/metatype/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/metatype/_build/latest?branchName=master)
 
-[Docs](https://docs.rs/metatype/0.1.2)
+[Docs](https://docs.rs/metatype/0.2.0)
 
 Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
 
@@ -16,24 +16,23 @@ assert_eq!(any::Any::METATYPE, MetaType::TraitObject);
 assert_eq!(<[u8]>::METATYPE, MetaType::Slice);
 
 let a: Box<usize> = Box::new(123);
-assert_eq!((&*a).meta_type(), MetaType::Concrete);
-let a: Box<any::Any> = a;
-assert_eq!((&*a).meta_type(), MetaType::TraitObject);
+assert_eq!(Type::meta_type(&*a), MetaType::Concrete);
+let a: Box<dyn any::Any> = a;
+assert_eq!(Type::meta_type(&*a), MetaType::TraitObject);
 
 let a = [123,456];
-assert_eq!(a.meta_type(), MetaType::Concrete);
+assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 let a: &[i32] = &a;
-assert_eq!(a.meta_type(), MetaType::Slice);
+assert_eq!(Type::meta_type(a), MetaType::Slice);
 
-let a: Box<any::Any> = Box::new(123);
-// https://github.com/rust-lang/rust/issues/50318
-// let meta: TraitObject = (&*a).meta();
-// println!("vtable: {:?}", meta.vtable);
+let a: Box<dyn any::Any> = Box::new(123);
+let meta: TraitObject = type_coerce(Type::meta(&*a));
+println!("vtable: {:?}", meta.vtable);
 ```
 
 ## Note
 
-This currently requires Rust nightly for the `raw` and `specialization` features.
+This currently requires Rust nightly for the `raw`, `specialization` and `arbitrary_self_types` features.
 
 ## License
 Licensed under either of
