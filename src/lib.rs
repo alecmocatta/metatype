@@ -1,4 +1,5 @@
-//! Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
+//! Helper methods to determine whether a type is `TraitObject`, `Slice` or
+//! `Concrete`, and work with them respectively.
 //!
 //! # Examples
 //!
@@ -10,41 +11,45 @@
 //! assert_eq!(<[u8]>::METATYPE, MetaType::Slice);
 //!
 //! let a: Box<usize> = Box::new(123);
-//! assert_eq!((&*a).meta_type(), MetaType::Concrete);
+//! assert_eq!(Type::meta_type(&*a), MetaType::Concrete);
 //! let a: Box<dyn any::Any> = a;
-//! assert_eq!((&*a).meta_type(), MetaType::TraitObject);
+//! assert_eq!(Type::meta_type(&*a), MetaType::TraitObject);
 //!
 //! let a = [123,456];
-//! assert_eq!(a.meta_type(), MetaType::Concrete);
+//! assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 //! let a: &[i32] = &a;
-//! assert_eq!(a.meta_type(), MetaType::Slice);
+//! assert_eq!(Type::meta_type(a), MetaType::Slice);
 //!
 //! let a: Box<dyn any::Any> = Box::new(123);
-//! // https://github.com/rust-lang/rust/issues/50318
-//! // let meta: TraitObject = (&*a).meta();
-//! // println!("vtable: {:?}", meta.vtable);
+//! let meta: TraitObject = type_coerce(Type::meta(&*a));
+//! println!("vtable: {:?}", meta.vtable);
 //! ```
 //!
 //! # Note
 //!
-//! This currently requires Rust nightly for the `raw` and `specialization` features.
+//! This currently requires Rust nightly for the `raw`, `specialization` and
+//! `arbitrary_self_types` features.
 
 #![doc(html_root_url = "https://docs.rs/metatype/0.1.2")]
-#![feature(raw, box_syntax, specialization)]
+#![feature(arbitrary_self_types)]
+#![feature(raw)]
+#![feature(slice_from_raw_parts)]
+#![feature(specialization)]
 #![warn(
 	missing_copy_implementations,
 	missing_debug_implementations,
 	missing_docs,
-	// trivial_casts,
+	trivial_casts,
 	trivial_numeric_casts,
 	unused_import_braces,
 	unused_qualifications,
 	unused_results,
 	clippy::pedantic
 )] // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
+#![allow(clippy::not_unsafe_ptr_arg_deref, clippy::use_self)]
 
 use std::{
-	any, mem::{self, MaybeUninit}, raw
+	any::type_name, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}, raw
 };
 
 /// Implemented on all types, it provides helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
@@ -54,19 +59,19 @@ pub trait Type {
 	/// Type of metadata for type.
 	type Meta: 'static;
 	/// Helper method describing whether a type is `TraitObject`, `Slice` or `Concrete`.
-	fn meta_type(&self) -> MetaType {
+	fn meta_type(self: *const Self) -> MetaType {
 		Self::METATYPE
 	}
-	/// Retrieve [TraitObject], [Slice] or [Concrete] meta data respectively for a type
-	fn meta(&self) -> Self::Meta;
+	/// Retrieve [`TraitObject`], [`Slice`] or [`Concrete`] meta data respectively for a type
+	fn meta(self: *const Self) -> Self::Meta;
 	/// Retrieve pointer to the data
-	fn data(&self) -> *const ();
+	fn data(self: *const Self) -> *const ();
 	/// Retrieve mut pointer to the data
-	fn data_mut(&mut self) -> *mut ();
-	/// Create a `Box<Self>` with the provided `Self::Meta` but with the allocated data uninitialized.
-	///
-	/// See the ongoing discussion [Validity of Box\<T\>](https://github.com/rust-lang/unsafe-code-guidelines/issues/145) for validity.
-	unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self>;
+	fn data_mut(self: *mut Self) -> *mut ();
+	/// Create a dangling non-null `*const Self` with the provided `Self::Meta`.
+	fn dangling(t: Self::Meta) -> NonNull<Self>;
+	/// Create a `*mut Self` with the provided `Self::Meta`.
+	fn fatten(thin: *mut (), t: Self::Meta) -> *mut Self;
 }
 /// Meta type of a type
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
@@ -101,81 +106,51 @@ impl<T: ?Sized> Type for T {
 	#[doc(hidden)]
 	default type Meta = TraitObject;
 	#[inline]
-	default fn meta(&self) -> Self::Meta {
-		assert_eq!(
-			(mem::size_of::<&Self>(), mem::align_of::<&Self>()),
-			(
-				mem::size_of::<raw::TraitObject>(),
-				mem::align_of::<raw::TraitObject>()
-			)
-		);
-		let trait_object: raw::TraitObject = unsafe { mem::transmute_copy(&self) };
-		assert_eq!(
-			trait_object.data as *const (),
-			self as *const Self as *const ()
-		);
+	default fn meta(self: *const Self) -> Self::Meta {
+		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
+		assert_eq!(self as *const (), trait_object.data);
 		let ret = TraitObject {
 			vtable: unsafe { &*trait_object.vtable },
 		};
-		assert_eq!(
-			any::TypeId::of::<Self::Meta>(),
-			any::TypeId::of::<TraitObject>()
-		);
-		unsafe { mem::transmute_copy(&ret) }
+		type_coerce(ret)
 	}
 	#[inline]
-	default fn data(&self) -> *const () {
-		assert_eq!(
-			(mem::size_of::<&Self>(), mem::align_of::<&Self>()),
-			(
-				mem::size_of::<raw::TraitObject>(),
-				mem::align_of::<raw::TraitObject>()
-			)
-		);
-		let trait_object: raw::TraitObject = unsafe { mem::transmute_copy(&self) };
-		assert_eq!(
-			trait_object.data as *const (),
-			self as *const Self as *const ()
-		);
-		self as *const Self as *const ()
+	default fn data(self: *const Self) -> *const () {
+		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
+		assert_eq!(self as *const (), trait_object.data);
+		self as *const ()
 	}
 	#[inline]
-	default fn data_mut(&mut self) -> *mut () {
-		assert_eq!(
-			(mem::size_of::<&Self>(), mem::align_of::<&Self>()),
-			(
-				mem::size_of::<raw::TraitObject>(),
-				mem::align_of::<raw::TraitObject>()
-			)
-		);
-		let trait_object: raw::TraitObject = unsafe { mem::transmute_copy(&self) };
-		assert_eq!(trait_object.data, self as *mut Self as *mut ());
-		self as *mut Self as *mut ()
+	default fn data_mut(self: *mut Self) -> *mut () {
+		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
+		assert_eq!(self as *mut (), trait_object.data);
+		self as *mut ()
 	}
-	default unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self> {
-		assert_eq!(
-			any::TypeId::of::<Self::Meta>(),
-			any::TypeId::of::<TraitObject>()
-		);
-		assert_eq!(
-			(mem::size_of::<&Self>(), mem::align_of::<&Self>()),
-			(
-				mem::size_of::<raw::TraitObject>(),
-				mem::align_of::<raw::TraitObject>()
-			)
-		);
-
-		let t: TraitObject = mem::transmute_copy(&t);
-		let vtable = t.vtable as *const () as *mut ();
-		let mut data = {
+	#[inline]
+	default fn dangling(t: Self::Meta) -> NonNull<Self> {
+		let t: TraitObject = type_coerce(t);
+		// align_of_val requires a reference: https://github.com/rust-lang/rfcs/issues/2017
+		// so to placate miri let's create one that's plausibly valid
+		let fake_thin = {
 			#[repr(align(64))]
 			struct Backing(u8);
 			static BACKING: Backing = Backing(0);
-			&BACKING as *const _ as *mut ()
+			let backing: *const _ = &BACKING;
+			backing as *mut ()
 		};
-		let object: &Self = mem::transmute_copy(&raw::TraitObject { data, vtable });
-		data = std::alloc::alloc(std::alloc::Layout::for_value(object)) as *mut ();
-		mem::transmute_copy(&raw::TraitObject { data, vtable })
+		let dangling_unaligned: NonNull<Self> =
+			NonNull::new(Self::fatten(fake_thin, type_coerce(t))).unwrap();
+		let dangling_unaligned: &Self = unsafe { dangling_unaligned.as_ref() };
+		let align = align_of_val(dangling_unaligned);
+		NonNull::new(Self::fatten(align as _, type_coerce(t))).unwrap()
+	}
+	#[inline]
+	default fn fatten(thin: *mut (), t: Self::Meta) -> *mut Self {
+		let t: TraitObject = type_coerce(t);
+		let vtable: *const () = t.vtable;
+		let vtable = vtable as *mut ();
+		let ret = raw::TraitObject { data: thin, vtable };
+		unsafe { transmute_coerce::<raw::TraitObject, *mut Self>(ret) }
 	}
 }
 #[doc(hidden)]
@@ -183,19 +158,22 @@ impl<T: Sized> Type for T {
 	const METATYPE: MetaType = MetaType::Concrete;
 	type Meta = Concrete;
 	#[inline]
-	fn meta(&self) -> Self::Meta {
+	fn meta(self: *const Self) -> Self::Meta {
 		Concrete
 	}
 	#[inline]
-	fn data(&self) -> *const () {
-		self as *const Self as *const ()
+	fn data(self: *const Self) -> *const () {
+		self as *const ()
 	}
 	#[inline]
-	fn data_mut(&mut self) -> *mut () {
-		self as *mut Self as *mut ()
+	fn data_mut(self: *mut Self) -> *mut () {
+		self as *mut ()
 	}
-	unsafe fn uninitialized_box(_: Self::Meta) -> Box<Self> {
-		mem::transmute(box MaybeUninit::<Self>::uninit())
+	fn dangling(_t: Self::Meta) -> NonNull<Self> {
+		NonNull::dangling()
+	}
+	fn fatten(thin: *mut (), _t: Self::Meta) -> *mut Self {
+		thin.cast()
 	}
 }
 #[doc(hidden)]
@@ -203,25 +181,28 @@ impl<T: Sized> Type for [T] {
 	const METATYPE: MetaType = MetaType::Slice;
 	type Meta = Slice;
 	#[inline]
-	fn meta(&self) -> Self::Meta {
+	fn meta(self: *const Self) -> Self::Meta {
+		let self_ = unsafe { &*self }; // https://github.com/rust-lang/rfcs/issues/2017
 		assert_eq!(
-			(mem::size_of_val(self), mem::align_of_val(self)),
-			(mem::size_of::<T>() * self.len(), mem::align_of::<T>())
+			(size_of_val(self_), align_of_val(self_)),
+			(size_of::<T>() * self_.len(), align_of::<T>())
 		);
-		Slice { len: self.len() }
+		Slice { len: self_.len() }
 	}
 	#[inline]
-	fn data(&self) -> *const () {
-		self.as_ptr() as *const ()
+	fn data(self: *const Self) -> *const () {
+		self as *const ()
 	}
 	#[inline]
-	fn data_mut(&mut self) -> *mut () {
-		self.as_mut_ptr() as *mut ()
+	fn data_mut(self: *mut Self) -> *mut () {
+		self as *mut ()
 	}
-	unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self> {
-		let mut backing = Vec::<T>::with_capacity(t.len);
-		backing.set_len(t.len);
-		backing.into_boxed_slice()
+	fn dangling(t: Self::Meta) -> NonNull<Self> {
+		let slice = slice_from_raw_parts_mut(NonNull::<T>::dangling().as_ptr(), t.len);
+		unsafe { NonNull::new_unchecked(slice) }
+	}
+	fn fatten(thin: *mut (), t: Self::Meta) -> *mut Self {
+		slice_from_raw_parts_mut(thin.cast(), t.len)
 	}
 }
 #[doc(hidden)]
@@ -229,33 +210,82 @@ impl Type for str {
 	const METATYPE: MetaType = MetaType::Slice;
 	type Meta = Slice;
 	#[inline]
-	fn meta(&self) -> Self::Meta {
-		assert_eq!(
-			(mem::size_of_val(self), mem::align_of_val(self)),
-			(self.len(), 1)
-		);
-		Slice { len: self.len() }
+	fn meta(self: *const Self) -> Self::Meta {
+		let self_ = unsafe { &*self }; // https://github.com/rust-lang/rfcs/issues/2017
+		assert_eq!((size_of_val(self_), align_of_val(self_)), (self_.len(), 1));
+		Slice { len: self_.len() }
 	}
 	#[inline]
-	fn data(&self) -> *const () {
-		self.as_ptr() as *const ()
+	fn data(self: *const Self) -> *const () {
+		self as *const ()
 	}
 	#[inline]
-	fn data_mut(&mut self) -> *mut () {
-		unsafe { self.as_bytes_mut() }.as_mut_ptr() as *mut ()
+	fn data_mut(self: *mut Self) -> *mut () {
+		self as *mut ()
 	}
-	unsafe fn uninitialized_box(t: Self::Meta) -> Box<Self> {
-		let mut backing = Vec::<u8>::with_capacity(t.len);
-		backing.set_len(t.len);
-		String::from_utf8_unchecked(backing).into_boxed_str()
+	fn dangling(t: Self::Meta) -> NonNull<Self> {
+		let bytes: *mut [u8] = <[u8]>::dangling(t).as_ptr();
+		unsafe { NonNull::new_unchecked(bytes as *mut Self) }
 	}
+	fn fatten(thin: *mut (), t: Self::Meta) -> *mut Self {
+		<[u8]>::fatten(thin, t) as *mut Self
+	}
+}
+
+unsafe fn transmute_coerce<A, B>(a: A) -> B {
+	assert_eq!(
+		(size_of::<A>(), align_of::<A>()),
+		(size_of::<B>(), align_of::<B>()),
+		"can't transmute_coerce {} to {} as sizes/alignments differ",
+		type_name::<A>(),
+		type_name::<B>()
+	);
+	let b = transmute_copy(&a);
+	forget(a);
+	b
+}
+
+/// Convert from one type parameter to another, where they are the same type.
+/// Panics with an explanatory message if the types differ.
+///
+/// In almost all circumstances this isn't needed, but it can be very useful in
+/// cases like [rust-lang/rust#50318](https://github.com/rust-lang/rust/issues/50318).
+pub fn type_coerce<A, B>(a: A) -> B {
+	try_type_coerce(a)
+		.unwrap_or_else(|| panic!("can't coerce {} to {}", type_name::<A>(), type_name::<B>()))
+}
+
+/// Convert from one type parameter to another, where they are the same type.
+/// Returns `None` if the types differ.
+///
+/// In almost all circumstances this isn't needed, but it can be very useful in
+/// cases like [rust-lang/rust#50318](https://github.com/rust-lang/rust/issues/50318).
+pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
+	trait Eq<B> {
+		fn eq(self) -> Option<B>;
+	}
+
+	struct Foo<A, B>(A, PhantomData<fn(B)>);
+
+	impl<A, B> Eq<B> for Foo<A, B> {
+		default fn eq(self) -> Option<B> {
+			None
+		}
+	}
+	impl<A> Eq<A> for Foo<A, A> {
+		fn eq(self) -> Option<A> {
+			Some(self.0)
+		}
+	}
+
+	Foo::<A, B>(a, PhantomData).eq()
 }
 
 #[cfg(test)]
 mod tests {
 	#![allow(clippy::cast_ptr_alignment, clippy::shadow_unrelated)]
-	use super::{MetaType, Type};
-	use std::{any, mem, ptr};
+	use super::{type_coerce, MetaType, Slice, TraitObject, Type};
+	use std::{any, ptr::NonNull};
 
 	#[test]
 	fn abc() {
@@ -265,19 +295,34 @@ mod tests {
 		let a: Box<dyn any::Any> = a;
 		assert_eq!(Type::meta_type(&*a), MetaType::TraitObject);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
-		let meta = Type::meta(&*a); // : TraitObject
-		let mut b: Box<dyn any::Any> = unsafe { Type::uninitialized_box(meta) };
-		assert_eq!(mem::size_of_val(&*b), mem::size_of::<usize>());
-		unsafe { ptr::write(&mut *b as *mut dyn any::Any as *mut usize, 456_usize) };
-		let x: usize = *Box::<dyn any::Any>::downcast(b).unwrap();
-		assert_eq!(x, 456);
+		let meta: TraitObject = type_coerce(Type::meta(&*a));
+		let dangling = <dyn any::Any as Type>::dangling(type_coerce(meta));
+		let _fat = <dyn any::Any as Type>::fatten(dangling.as_ptr() as *mut (), type_coerce(meta));
+		let mut x: usize = 0;
+		let x_ptr: *mut usize = &mut x;
+		let mut x_ptr: NonNull<dyn any::Any> = NonNull::new(<dyn any::Any as Type>::fatten(
+			x_ptr as *mut (),
+			type_coerce(meta),
+		))
+		.unwrap();
+		let x_ref: &mut dyn any::Any = unsafe { x_ptr.as_mut() };
+		let x_ref: &mut usize = x_ref.downcast_mut().unwrap();
+		*x_ref = 123;
+		assert_eq!(x, 123);
+
 		let a: &[usize] = &[1, 2, 3];
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
+		let dangling = <[String] as Type>::dangling(Slice { len: 100 });
+		let _fat = <[String] as Type>::fatten(dangling.as_ptr() as *mut (), Slice { len: 100 });
+
 		let a: Box<[usize]> = vec![1_usize, 2, 3].into_boxed_slice();
 		assert_eq!(Type::meta_type(&*a), MetaType::Slice);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
+
 		let a: &str = "abc";
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
+		let dangling = <str as Type>::dangling(Slice { len: 100 });
+		let _fat = <str as Type>::fatten(dangling.as_ptr() as *mut (), Slice { len: 100 });
 	}
 }
