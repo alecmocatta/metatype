@@ -46,10 +46,14 @@
 	unused_results,
 	clippy::pedantic
 )] // from https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deny-warnings.md
-#![allow(clippy::not_unsafe_ptr_arg_deref, clippy::use_self)]
+#![allow(
+	clippy::must_use_candidate,
+	clippy::not_unsafe_ptr_arg_deref,
+	clippy::use_self
+)]
 
 use std::{
-	any::type_name, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}, raw
+	any::{type_name, TypeId}, hash::{Hash, Hasher}, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}, raw
 };
 
 /// Implemented on all types, it provides helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
@@ -279,6 +283,16 @@ pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
 	}
 
 	Foo::<A, B>(a, PhantomData).eq()
+}
+
+/// Gets an identifier which is globally unique to the specified type. This
+/// function will return the same value for a type regardless of whichever crate
+/// it is invoked in.
+pub fn type_id<T: ?Sized + 'static>() -> u64 {
+	let type_id = TypeId::of::<T>();
+	let mut hasher = std::collections::hash_map::DefaultHasher::new();
+	type_id.hash(&mut hasher);
+	hasher.finish()
 }
 
 #[cfg(test)]
