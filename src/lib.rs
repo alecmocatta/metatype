@@ -30,7 +30,7 @@
 //! This currently requires Rust nightly for the `raw`, `specialization` and
 //! `arbitrary_self_types` features.
 
-#![doc(html_root_url = "https://docs.rs/metatype/0.1.2")]
+#![doc(html_root_url = "https://docs.rs/metatype/0.2.0")]
 #![feature(arbitrary_self_types)]
 #![feature(raw)]
 #![feature(slice_from_raw_parts)]
