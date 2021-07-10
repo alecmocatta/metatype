@@ -30,10 +30,9 @@
 //! This currently requires Rust nightly for the `raw`, `specialization` and
 //! `arbitrary_self_types` features.
 
-#![doc(html_root_url = "https://docs.rs/metatype/0.2.0")]
+#![doc(html_root_url = "https://docs.rs/metatype/0.2.1")]
 #![feature(arbitrary_self_types)]
-#![feature(raw)]
-#![feature(slice_from_raw_parts)]
+#![feature(ptr_metadata)]
 #![feature(specialization)]
 #![warn(
 	missing_copy_implementations,
@@ -49,11 +48,13 @@
 #![allow(
 	clippy::must_use_candidate,
 	clippy::not_unsafe_ptr_arg_deref,
-	clippy::use_self
+	clippy::use_self,
+	clippy::missing_panics_doc,
+	incomplete_features
 )]
 
 use std::{
-	any::{type_name, TypeId}, hash::{Hash, Hasher}, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}, raw
+	any::{type_name, TypeId}, hash::{Hash, Hasher}, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}
 };
 
 /// Implemented on all types, it provides helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
@@ -111,24 +112,18 @@ impl<T: ?Sized> Type for T {
 	default type Meta = TraitObject;
 	#[inline]
 	default fn meta(self: *const Self) -> Self::Meta {
-		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
-		assert_eq!(self as *const (), trait_object.data);
 		let ret = TraitObject {
-			vtable: unsafe { &*trait_object.vtable },
+			vtable: unsafe { transmute_coerce(std::ptr::metadata(self)) },
 		};
 		type_coerce(ret)
 	}
 	#[inline]
 	default fn data(self: *const Self) -> *const () {
-		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
-		assert_eq!(self as *const (), trait_object.data);
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	default fn data_mut(self: *mut Self) -> *mut () {
-		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
-		assert_eq!(self as *mut (), trait_object.data);
-		self as *mut ()
+		self.cast()
 	}
 	#[inline]
 	default fn dangling(t: Self::Meta) -> NonNull<Self> {
@@ -153,8 +148,7 @@ impl<T: ?Sized> Type for T {
 		let t: TraitObject = type_coerce(t);
 		let vtable: *const () = t.vtable;
 		let vtable = vtable as *mut ();
-		let ret = raw::TraitObject { data: thin, vtable };
-		unsafe { transmute_coerce::<raw::TraitObject, *mut Self>(ret) }
+		std::ptr::from_raw_parts_mut(thin, unsafe { transmute_coerce(vtable) })
 	}
 }
 #[doc(hidden)]
@@ -167,11 +161,11 @@ impl<T: Sized> Type for T {
 	}
 	#[inline]
 	fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	fn dangling(_t: Self::Meta) -> NonNull<Self> {
 		NonNull::dangling()
@@ -195,11 +189,11 @@ impl<T: Sized> Type for [T] {
 	}
 	#[inline]
 	fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	fn dangling(t: Self::Meta) -> NonNull<Self> {
 		let slice = slice_from_raw_parts_mut(NonNull::<T>::dangling().as_ptr(), t.len);
@@ -221,11 +215,11 @@ impl Type for str {
 	}
 	#[inline]
 	fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	fn dangling(t: Self::Meta) -> NonNull<Self> {
 		let bytes: *mut [u8] = <[u8]>::dangling(t).as_ptr();
@@ -311,11 +305,11 @@ mod tests {
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 		let meta: TraitObject = type_coerce(Type::meta(&*a));
 		let dangling = <dyn any::Any as Type>::dangling(type_coerce(meta));
-		let _fat = <dyn any::Any as Type>::fatten(dangling.as_ptr() as *mut (), type_coerce(meta));
+		let _fat = <dyn any::Any as Type>::fatten(dangling.as_ptr().cast(), type_coerce(meta));
 		let mut x: usize = 0;
 		let x_ptr: *mut usize = &mut x;
 		let mut x_ptr: NonNull<dyn any::Any> = NonNull::new(<dyn any::Any as Type>::fatten(
-			x_ptr as *mut (),
+			x_ptr.cast(),
 			type_coerce(meta),
 		))
 		.unwrap();
@@ -327,7 +321,7 @@ mod tests {
 		let a: &[usize] = &[1, 2, 3];
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
 		let dangling = <[String] as Type>::dangling(Slice { len: 100 });
-		let _fat = <[String] as Type>::fatten(dangling.as_ptr() as *mut (), Slice { len: 100 });
+		let _fat = <[String] as Type>::fatten(dangling.as_ptr().cast(), Slice { len: 100 });
 
 		let a: Box<[usize]> = vec![1_usize, 2, 3].into_boxed_slice();
 		assert_eq!(Type::meta_type(&*a), MetaType::Slice);
@@ -337,6 +331,6 @@ mod tests {
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 		let dangling = <str as Type>::dangling(Slice { len: 100 });
-		let _fat = <str as Type>::fatten(dangling.as_ptr() as *mut (), Slice { len: 100 });
+		let _fat = <str as Type>::fatten(dangling.as_ptr().cast(), Slice { len: 100 });
 	}
 }
