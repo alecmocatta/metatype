@@ -2,9 +2,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/metatype.svg?maxAge=86400)](https://crates.io/crates/metatype)
 [![MIT / Apache 2.0 licensed](https://img.shields.io/crates/l/metatype.svg?maxAge=2592000)](#License)
-[![Build Status](https://dev.azure.com/alecmocatta/metatype/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/metatype/_build/latest?branchName=master)
+[![Build Status](https://dev.azure.com/alecmocatta/metatype/_apis/build/status/tests?branchName=master)](https://dev.azure.com/alecmocatta/metatype/_build?definitionId=7)
 
-[Docs](https://docs.rs/metatype/0.2.0)
+[📖 Docs](https://docs.rs/metatype/0.2) | [💬 Chat](https://constellation.zulipchat.com/#narrow/stream/213236-subprojects)
 
 Helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
 
@@ -35,6 +35,7 @@ println!("vtable: {:?}", meta.vtable);
 This currently requires Rust nightly for the `raw`, `specialization` and `arbitrary_self_types` features.
 
 ## License
+
 Licensed under either of
 
  * Apache License, Version 2.0, ([LICENSE-APACHE.txt](LICENSE-APACHE.txt) or http://www.apache.org/licenses/LICENSE-2.0)
