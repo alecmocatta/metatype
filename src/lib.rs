@@ -32,8 +32,7 @@
 
 #![doc(html_root_url = "https://docs.rs/metatype/0.2.0")]
 #![feature(arbitrary_self_types)]
-#![feature(raw)]
-#![feature(slice_from_raw_parts)]
+#![feature(ptr_metadata)]
 #![feature(specialization)]
 #![warn(
 	missing_copy_implementations,
@@ -53,7 +52,7 @@
 )]
 
 use std::{
-	any::{type_name, TypeId}, hash::{Hash, Hasher}, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}, raw
+	any::{type_name, TypeId}, hash::{Hash, Hasher}, marker::PhantomData, mem::{align_of, align_of_val, forget, size_of, size_of_val, transmute_copy}, ptr::{slice_from_raw_parts_mut, NonNull}
 };
 
 /// Implemented on all types, it provides helper methods to determine whether a type is `TraitObject`, `Slice` or `Concrete`, and work with them respectively.
@@ -111,23 +110,17 @@ impl<T: ?Sized> Type for T {
 	default type Meta = TraitObject;
 	#[inline]
 	default fn meta(self: *const Self) -> Self::Meta {
-		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
-		assert_eq!(self as *const (), trait_object.data);
 		let ret = TraitObject {
-			vtable: unsafe { &*trait_object.vtable },
+			vtable: unsafe { transmute_coerce(std::ptr::metadata(self)) },
 		};
 		type_coerce(ret)
 	}
 	#[inline]
 	default fn data(self: *const Self) -> *const () {
-		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
-		assert_eq!(self as *const (), trait_object.data);
 		self as *const ()
 	}
 	#[inline]
 	default fn data_mut(self: *mut Self) -> *mut () {
-		let trait_object = unsafe { transmute_coerce::<*const Self, raw::TraitObject>(self) };
-		assert_eq!(self as *mut (), trait_object.data);
 		self as *mut ()
 	}
 	#[inline]
@@ -153,8 +146,7 @@ impl<T: ?Sized> Type for T {
 		let t: TraitObject = type_coerce(t);
 		let vtable: *const () = t.vtable;
 		let vtable = vtable as *mut ();
-		let ret = raw::TraitObject { data: thin, vtable };
-		unsafe { transmute_coerce::<raw::TraitObject, *mut Self>(ret) }
+		std::ptr::from_raw_parts_mut(thin, unsafe { transmute_coerce(vtable) })
 	}
 }
 #[doc(hidden)]
