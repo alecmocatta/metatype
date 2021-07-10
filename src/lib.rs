@@ -48,7 +48,9 @@
 #![allow(
 	clippy::must_use_candidate,
 	clippy::not_unsafe_ptr_arg_deref,
-	clippy::use_self
+	clippy::use_self,
+	clippy::missing_panics_doc,
+	incomplete_features
 )]
 
 use std::{
@@ -117,11 +119,11 @@ impl<T: ?Sized> Type for T {
 	}
 	#[inline]
 	default fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	default fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	#[inline]
 	default fn dangling(t: Self::Meta) -> NonNull<Self> {
@@ -159,11 +161,11 @@ impl<T: Sized> Type for T {
 	}
 	#[inline]
 	fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	fn dangling(_t: Self::Meta) -> NonNull<Self> {
 		NonNull::dangling()
@@ -187,11 +189,11 @@ impl<T: Sized> Type for [T] {
 	}
 	#[inline]
 	fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	fn dangling(t: Self::Meta) -> NonNull<Self> {
 		let slice = slice_from_raw_parts_mut(NonNull::<T>::dangling().as_ptr(), t.len);
@@ -213,11 +215,11 @@ impl Type for str {
 	}
 	#[inline]
 	fn data(self: *const Self) -> *const () {
-		self as *const ()
+		self.cast()
 	}
 	#[inline]
 	fn data_mut(self: *mut Self) -> *mut () {
-		self as *mut ()
+		self.cast()
 	}
 	fn dangling(t: Self::Meta) -> NonNull<Self> {
 		let bytes: *mut [u8] = <[u8]>::dangling(t).as_ptr();
@@ -303,11 +305,11 @@ mod tests {
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 		let meta: TraitObject = type_coerce(Type::meta(&*a));
 		let dangling = <dyn any::Any as Type>::dangling(type_coerce(meta));
-		let _fat = <dyn any::Any as Type>::fatten(dangling.as_ptr() as *mut (), type_coerce(meta));
+		let _fat = <dyn any::Any as Type>::fatten(dangling.as_ptr().cast(), type_coerce(meta));
 		let mut x: usize = 0;
 		let x_ptr: *mut usize = &mut x;
 		let mut x_ptr: NonNull<dyn any::Any> = NonNull::new(<dyn any::Any as Type>::fatten(
-			x_ptr as *mut (),
+			x_ptr.cast(),
 			type_coerce(meta),
 		))
 		.unwrap();
@@ -319,7 +321,7 @@ mod tests {
 		let a: &[usize] = &[1, 2, 3];
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
 		let dangling = <[String] as Type>::dangling(Slice { len: 100 });
-		let _fat = <[String] as Type>::fatten(dangling.as_ptr() as *mut (), Slice { len: 100 });
+		let _fat = <[String] as Type>::fatten(dangling.as_ptr().cast(), Slice { len: 100 });
 
 		let a: Box<[usize]> = vec![1_usize, 2, 3].into_boxed_slice();
 		assert_eq!(Type::meta_type(&*a), MetaType::Slice);
@@ -329,6 +331,6 @@ mod tests {
 		assert_eq!(Type::meta_type(a), MetaType::Slice);
 		assert_eq!(Type::meta_type(&a), MetaType::Concrete);
 		let dangling = <str as Type>::dangling(Slice { len: 100 });
-		let _fat = <str as Type>::fatten(dangling.as_ptr() as *mut (), Slice { len: 100 });
+		let _fat = <str as Type>::fatten(dangling.as_ptr().cast(), Slice { len: 100 });
 	}
 }
