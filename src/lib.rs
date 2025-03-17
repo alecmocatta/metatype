@@ -32,6 +32,7 @@
 
 #![doc(html_root_url = "https://docs.rs/metatype/0.2.1")]
 #![feature(arbitrary_self_types)]
+#![feature(arbitrary_self_types_pointers)]
 #![feature(ptr_metadata)]
 #![feature(specialization)]
 #![warn(
