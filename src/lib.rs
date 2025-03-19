@@ -28,10 +28,10 @@
 //! # Note
 //!
 //! This currently requires Rust nightly for the `ptr_metadata`, `specialization`
-//! and `arbitrary_self_types` features.
+//! and `arbitrary_self_types_pointers` features.
 
-#![doc(html_root_url = "https://docs.rs/metatype/0.2.1")]
-#![feature(arbitrary_self_types)]
+#![doc(html_root_url = "https://docs.rs/metatype/0.2.2")]
+#![feature(arbitrary_self_types_pointers)]
 #![feature(ptr_metadata)]
 #![feature(specialization)]
 #![warn(
@@ -131,11 +131,12 @@ impl<T: ?Sized> Type for T {
 		// align_of_val requires a reference: https://github.com/rust-lang/rfcs/issues/2017
 		// so to placate miri let's create one that's plausibly valid
 		let fake_thin = {
+			#[allow(dead_code)]
 			#[repr(align(64))]
 			struct Backing(u8);
 			static BACKING: Backing = Backing(0);
 			let backing: *const _ = &BACKING;
-			backing as *mut ()
+			backing.cast::<()>().cast_mut()
 		};
 		let dangling_unaligned: NonNull<Self> =
 			NonNull::new(Self::fatten(fake_thin, type_coerce(t))).unwrap();
@@ -147,7 +148,7 @@ impl<T: ?Sized> Type for T {
 	default fn fatten(thin: *mut (), t: Self::Meta) -> *mut Self {
 		let t: TraitObject = type_coerce(t);
 		let vtable: *const () = t.vtable;
-		let vtable = vtable as *mut ();
+		let vtable = vtable.cast_mut();
 		std::ptr::from_raw_parts_mut(thin, unsafe { transmute_coerce(vtable) })
 	}
 }
@@ -178,6 +179,7 @@ impl<T: Sized> Type for T {
 impl<T: Sized> Type for [T] {
 	const METATYPE: MetaType = MetaType::Slice;
 	type Meta = Slice;
+	#[allow(clippy::manual_slice_size_calculation)]
 	#[inline]
 	fn meta(self: *const Self) -> Self::Meta {
 		let self_ = unsafe { &*self }; // https://github.com/rust-lang/rfcs/issues/2017
@@ -270,6 +272,7 @@ pub fn try_type_coerce<A, B>(a: A) -> Option<B> {
 			None
 		}
 	}
+	#[allow(clippy::mismatching_type_param_order)]
 	impl<A> Eq<A> for Foo<A, A> {
 		fn eq(self) -> Option<A> {
 			Some(self.0)
