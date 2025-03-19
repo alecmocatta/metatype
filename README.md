@@ -32,7 +32,7 @@ println!("vtable: {:?}", meta.vtable);
 
 ## Note
 
-This currently requires Rust nightly for the `ptr_metadata`, `specialization` and `arbitrary_self_types` features.
+This currently requires Rust nightly for the `ptr_metadata`, `specialization` and `arbitrary_self_types_pointers` features.
 
 ## License
 
