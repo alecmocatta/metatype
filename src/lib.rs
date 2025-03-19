@@ -30,7 +30,7 @@
 //! This currently requires Rust nightly for the `ptr_metadata`, `specialization`
 //! and `arbitrary_self_types_pointers` features.
 
-#![doc(html_root_url = "https://docs.rs/metatype/0.2.1")]
+#![doc(html_root_url = "https://docs.rs/metatype/0.2.2")]
 #![feature(arbitrary_self_types_pointers)]
 #![feature(ptr_metadata)]
 #![feature(specialization)]
